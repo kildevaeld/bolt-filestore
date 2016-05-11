@@ -1,4 +1,4 @@
-package files
+package filestore
 
 import (
 	"bytes"
@@ -157,6 +157,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			Ctime:    now,
 			Mtime:    now,
 			Perm:     0600,
+			Meta:     Meta{},
 		}
 
 		b, e := file.Marshal()
@@ -448,6 +449,29 @@ func (self *fs_impl) Chgrp(path string, guid []byte) error {
 
 		return meta.Put([]byte(path), b)
 	})
+}
+
+func (self *fs_impl) SetMeta(path string, metadata Meta) error {
+
+	file, err := self.Get(path)
+	if err != nil {
+		return err
+	}
+
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket(metaBucket)
+
+		file.Mtime = time.Now().Unix()
+		file.Meta = metadata
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		return meta.Put([]byte(path), b)
+	})
+
 }
 
 func New(path string) (FS, error) {

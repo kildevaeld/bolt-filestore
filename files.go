@@ -1,4 +1,4 @@
-package files
+package filestore
 
 import (
 	"errors"
@@ -54,5 +54,6 @@ type FS interface {
 	Chown(path string, uid []byte) error
 	Chgrp(path string, guid []byte) error
 	List(prefix string, fn func(node *Node) error) error
-	ListMeta(fn func(path string, file File) error) error
+	//ListMeta(fn func(path string, file File) error) error
+	SetMeta(path string, meta Meta) error
 }

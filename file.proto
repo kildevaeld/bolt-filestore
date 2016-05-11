@@ -1,5 +1,5 @@
 syntax = "proto3";
-package files;
+package filestore;
 
 import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
@@ -17,4 +17,7 @@ message File {
     bytes guid = 8;
     bytes perm = 9 [(gogoproto.customtype) = "FileMode", (gogoproto.nullable) = false];
     bytes fid = 10 [(gogoproto.customtype) = "Fid", (gogoproto.nullable) = false];
+ 
+    bytes meta = 11 [(gogoproto.customtype) = "Meta", (gogoproto.nullable) = false];
+ 
  }

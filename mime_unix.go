@@ -1,5 +1,5 @@
 // +build darwin freebsd linux netbsd openbsd
-package files
+package filestore
 
 import "github.com/rakyll/magicmime"
 

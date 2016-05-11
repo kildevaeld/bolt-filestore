@@ -1,5 +1,5 @@
 // +build windows
-package files
+package filestore
 
 import "bitbucket.org/taruti/mimemagic"
 
