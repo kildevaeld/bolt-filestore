@@ -2,7 +2,6 @@ package files
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -12,7 +11,10 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/kildevaeld/percy/utils"
+	. "github.com/tj/go-debug"
 )
+
+var debug = Debug("files")
 
 var metaBucket = []byte("$meta")
 var rootBucket = []byte("/")
@@ -22,29 +24,32 @@ type fs_impl struct {
 }
 
 func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, parent bool) (*bolt.Bucket, error) {
+	debug("get bucket path: %s", path)
+
+	debug("rootbucket: %s - %d", rootBucket)
+	var bucket *bolt.Bucket = tx.Bucket(rootBucket)
+
+	if path == "/" {
+		return bucket, nil
+	}
 
 	split := strings.Split(path, "/")
 	l := len(split)
-	i := 0
-	var bucket *bolt.Bucket = nil
-	var cur string
+	i := 1
+
 	var err error
 	for i < l {
 
-		cur = "/" + split[i]
+		cur := "/" + split[i]
 
-		var b *bolt.Bucket
-		if bucket == nil {
-			b = tx.Bucket(rootBucket)
-		} else {
-			b = bucket.Bucket([]byte(cur))
-		}
+		debug("	subbucket: %s", cur)
+		b := bucket.Bucket([]byte(cur))
 
 		if b == nil {
 			if !create {
 				return nil, ErrNotExists
 			}
-
+			debug("	create bucket: %s", cur)
 			b, err = bucket.CreateBucket([]byte(cur))
 			if err != nil {
 				return nil, err
@@ -52,10 +57,8 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 		}
 		i++
 		if i == l && parent {
-
 			break
 		} else {
-
 			bucket = b
 		}
 
@@ -108,15 +111,14 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 		options = &CreateOptions{}
 	}
 
-	filename := filepath.Base(path)
-	dir := filepath.Dir(path)
-
-	/*if dir[0] == '/' {
-		dir = dir[1:]
-	}*/
 	if path[0] != '/' {
 		path = "/" + path
 	}
+
+	filename := filepath.Base(path)
+	dir := filepath.Dir(path)
+
+	debug("create path: %s, file: %s", dir, filename)
 
 	var file *File
 
@@ -154,6 +156,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			Path:     filepath.Join(path, filename),
 			Ctime:    now,
 			Mtime:    now,
+			Perm:     0600,
 		}
 
 		b, e := file.Marshal()
@@ -239,14 +242,16 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 			return err
 		}
 		return self.bolt.Update(func(tx *bolt.Tx) error {
-			fmt.Printf("Path %s\n", path)
+
 			bucket, e := self.getBucketFromPath(path, tx, false, true)
 
 			if e != nil {
+
 				return e
 			}
-			dir := filepath.Base(path)
 
+			dir := "/" + filepath.Base(path)
+			debug("rm bucket: %s", dir)
 			e = bucket.DeleteBucket([]byte(dir))
 
 			if e != nil {
@@ -258,6 +263,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 			cursor := meta.Cursor()
 			bPath := []byte(path)
 			for k, _ := cursor.Seek(bPath); bytes.HasPrefix(k, bPath); k, _ = cursor.Next() {
+				debug("rm meta: %s", k)
 				meta.Delete(k)
 			}
 
@@ -278,7 +284,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 		if err != nil {
 			return err
 		}
-
+		debug("rm file: %s", path)
 		err = bucket.Delete([]byte(filename))
 
 		if err != nil {
@@ -286,7 +292,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 		}
 
 		meta := tx.Bucket(metaBucket)
-
+		debug("rm meta: %s", path)
 		return meta.Delete([]byte(path))
 
 	})
@@ -323,13 +329,13 @@ func buildNodes(prefix string) *Node {
 
 func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) {
 
-	if prefix[0] != '/' {
+	if prefix == "" || prefix[0] != '/' {
 		prefix = "/" + prefix
 	}
 
 	parent := buildNodes(prefix)
-
-	return self.bolt.Update(func(tx *bolt.Tx) error {
+	debug("parent: %v", parent)
+	return self.bolt.View(func(tx *bolt.Tx) error {
 		var bucket *bolt.Bucket
 
 		if prefix == "/" {
@@ -341,7 +347,7 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) 
 			}
 		}
 
-		bucket.ForEach(func(k, v []byte) error {
+		return bucket.ForEach(func(k, v []byte) error {
 			node := &Node{
 				Dir:    false,
 				Parent: parent,
@@ -355,7 +361,6 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) 
 			return fn(node)
 		})
 
-		return nil
 	})
 
 }
@@ -380,6 +385,69 @@ func (self *fs_impl) Mkdir(path string, recursive bool) error {
 	  })*/
 
 	return nil
+}
+
+func (self *fs_impl) Chmod(path string, mode FileMode) error {
+
+	file, err := self.Get(path)
+	if err != nil {
+		return err
+	}
+
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket(metaBucket)
+
+		file.Mtime = time.Now().Unix()
+		file.Perm = mode
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		return meta.Put([]byte(path), b)
+	})
+
+}
+func (self *fs_impl) Chown(path string, uid []byte) error {
+	file, err := self.Get(path)
+	if err != nil {
+		return err
+	}
+
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket(metaBucket)
+
+		file.Mtime = time.Now().Unix()
+		file.Uid = uid
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		return meta.Put([]byte(path), b)
+	})
+}
+func (self *fs_impl) Chgrp(path string, guid []byte) error {
+	file, err := self.Get(path)
+	if err != nil {
+		return err
+	}
+
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket(metaBucket)
+
+		file.Mtime = time.Now().Unix()
+		file.Guid = guid
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		return meta.Put([]byte(path), b)
+	})
 }
 
 func New(path string) (FS, error) {

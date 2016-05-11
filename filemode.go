@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-
-	"github.com/kildevaeld/percy/utils"
 )
 
 type FileMode int32
@@ -60,56 +58,28 @@ func (this FileMode) Compare(that FileMode) int {
 	return bytes.Compare(thisdata, thatdata)
 }
 
-type Fid utils.Sid
-
-func (u Fid) Marshal() ([]byte, error) {
-	buffer := make([]byte, 12)
-	_, err := u.MarshalTo(buffer)
-	return buffer, err
-}
-
-func (u Fid) MarshalTo(data []byte) (n int, err error) {
-	for i, b := range u {
-		data[i] = byte(b)
+func (m FileMode) String() string {
+	const str = "dalTLDpSugct"
+	var buf [32]byte // Mode is uint32.
+	w := 0
+	for i, c := range str {
+		if m&(1<<uint(32-1-i)) != 0 {
+			buf[w] = byte(c)
+			w++
+		}
 	}
-	return 12, nil
-}
-
-func (u *Fid) Unmarshal(data []byte) error {
-	if data == nil {
-		u = nil
-		return nil
+	if w == 0 {
+		buf[w] = '-'
+		w++
 	}
-	if len(data) == 0 {
-		pu := Fid(0)
-		*u = pu
-		return nil
+	const rwx = "rwxrwxrwx"
+	for i, c := range rwx {
+		if m&(1<<uint(9-1-i)) != 0 {
+			buf[w] = byte(c)
+		} else {
+			buf[w] = '-'
+		}
+		w++
 	}
-	if len(data) != 8 {
-		return errors.New("Fid: invalid length")
-	}
-
-	pu := Fid(data)
-	*u = pu
-	return nil
-}
-
-func (this Fid) Equal(that Fid) bool {
-	return this == that
-}
-
-func (u Fid) Size() int {
-	return 12
-}
-
-func (this Fid) Compare(that Fid) int {
-	thisdata, err := this.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	thatdata, err := that.Marshal()
-	if err != nil {
-		panic(err)
-	}
-	return bytes.Compare(thisdata, thatdata)
+	return string(buf[:w])
 }

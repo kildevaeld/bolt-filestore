@@ -49,8 +49,10 @@ type FS interface {
 	Read(path string) (io.Reader, error)
 	Get(path string) (*File, error)
 	Remove(path string, recursive bool) error
-	Mkdir(path string, recursive bool) error
+	//Mkdir(path string, recursive bool) error
+	Chmod(path string, mode FileMode) error
+	Chown(path string, uid []byte) error
+	Chgrp(path string, guid []byte) error
 	List(prefix string, fn func(node *Node) error) error
-
 	ListMeta(fn func(path string, file File) error) error
 }

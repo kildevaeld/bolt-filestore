@@ -14,7 +14,7 @@ message File {
     int64 mtime = 6;
     
     bytes uid = 7;
-    bytes gid = 8;
+    bytes guid = 8;
     bytes perm = 9 [(gogoproto.customtype) = "FileMode", (gogoproto.nullable) = false];
     bytes fid = 10 [(gogoproto.customtype) = "Fid", (gogoproto.nullable) = false];
  }

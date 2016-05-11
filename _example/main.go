@@ -7,6 +7,23 @@ import (
 	"github.com/kildevaeld/files"
 )
 
+func print(indent string, node *files.Node, fs files.FS) error {
+	if node.Dir {
+		fmt.Printf("%sDirectory: %s\n", indent, node.Path)
+		return fs.List(node.Path, func(node *files.Node) error {
+
+			return print(indent+"  ", node, fs)
+		})
+	}
+
+	file, e := fs.Get(node.Path)
+	if e != nil {
+		return e
+	}
+	fmt.Printf("%sFile: %s, Size: %d, Mime: %s, Id: %s, Perm: %s\n", indent, file.Filename, file.Filesize, file.Mime, file.Fid.Hex(), file.Perm)
+	return nil
+}
+
 func main() {
 
 	fs, _ := files.New("database.bolt")
@@ -14,6 +31,8 @@ func main() {
 	fs.CreatePath("/src/main.go", "./main.go", &files.CreateOptions{
 		MkdirP: true,
 	})
+
+	fs.CreateBytes("/src/test.txt", []byte("Hello, You wonderful woman"), nil)
 
 	/*file, e = fs.Get("/src/main.go")
 
@@ -28,20 +47,13 @@ func main() {
 	})
 
 	fs.List("/", func(node *files.Node) error {
-		fmt.Printf("%#v\n", node)
-		return nil
+		return print("", node, fs)
 	})
-
+	//fmt.Printf("LIST %v", e)
 	e := fs.Remove("/src/lib", true)
-
-	fs.ListMeta(func(node string, file files.File) error {
-		fmt.Printf("%#v - %#v\n", node, file)
-		return nil
-	})
-
-	fs.List("/src", func(node *files.Node) error {
-		fmt.Printf("%#v\n", node)
-		return nil
+	fmt.Println("\nRoot: /")
+	fs.List("/", func(node *files.Node) error {
+		return print(" ", node, fs)
 	})
 
 	fmt.Printf("Removed %v\n", e)
