@@ -52,5 +52,5 @@ type FS interface {
 	Mkdir(path string, recursive bool) error
 	List(prefix string, fn func(node *Node) error) error
 
-	ListMeta(fn func(path string) error) error
+	ListMeta(fn func(path string, file File) error) error
 }

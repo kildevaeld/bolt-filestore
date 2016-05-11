@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/kildevaeld/files"
 )
@@ -9,7 +10,7 @@ import (
 func main() {
 
 	fs, _ := files.New("database.bolt")
-
+	defer os.Remove("database.bolt")
 	fs.CreatePath("/src/main.go", "./main.go", &files.CreateOptions{
 		MkdirP: true,
 	})
@@ -33,8 +34,8 @@ func main() {
 
 	e := fs.Remove("/src/lib", true)
 
-	fs.ListMeta(func(node string) error {
-		fmt.Printf("%#v\n", node)
+	fs.ListMeta(func(node string, file files.File) error {
+		fmt.Printf("%#v - %#v\n", node, file)
 		return nil
 	})
 

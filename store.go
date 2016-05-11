@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/kildevaeld/percy/utils"
 )
 
 var metaBucket = []byte("$meta")
@@ -146,6 +147,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 		now := time.Now().Unix()
 
 		file = &File{
+			Fid:      Fid(utils.NewSid()),
 			Filename: filename,
 			Mime:     options.Mime,
 			Filesize: uint64(len(bytes)),
@@ -358,12 +360,13 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) 
 
 }
 
-func (self *fs_impl) ListMeta(fn func(path string) error) error {
+func (self *fs_impl) ListMeta(fn func(path string, file File) error) error {
 	return self.bolt.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(metaBucket)
-
+		var file File
 		bucket.ForEach(func(k, v []byte) error {
-			return fn(string(k))
+			file.Unmarshal(v)
+			return fn(string(k), file)
 		})
 
 		return nil
