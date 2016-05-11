@@ -3,9 +3,9 @@ package files
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -56,8 +56,43 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool) (*
 	return bucket, nil
 }
 
+func (self *fs_impl) CreatePath(dest string, src string, options *CreateOptions) (*File, error) {
+	if options == nil {
+		options = &CreateOptions{}
+	}
+
+	if options.Mime == "" {
+		mime, err := DetectContentTypeFromPath(src)
+		if err != nil || mime == "" {
+			mime = "application/octet-stream"
+		}
+		options.Mime = mime
+	}
+
+	reader, err := os.Open(src)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	return self.Create(dest, reader, options)
+}
+
 func (self *fs_impl) CreateBytes(path string, b []byte, options *CreateOptions) (*File, error) {
 	buf := bytes.NewBuffer(b)
+
+	if options == nil {
+		options = &CreateOptions{}
+	}
+
+	if options.Mime == "" {
+		mime, err := DetectContentType(b)
+		if err != nil || mime == "" {
+			mime = "application/octet-stream"
+		}
+		options.Mime = mime
+	}
+
 	return self.Create(path, buf, options)
 }
 
@@ -86,8 +121,16 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			return err
 		}
 
+		if options.Mime == "" {
+			mime, err := DetectContentType(bytes)
+			if err != nil || mime == "" {
+				mime = "application/octet-stream"
+			}
+			options.Mime = mime
+		}
+
 		if e := bucket.Get([]byte(filename)); e != nil || len(e) > 0 {
-			return errors.New("Already exists")
+			return ErrAlreadyExists
 		}
 
 		if e := bucket.Put([]byte(filename), bytes); e != nil {
@@ -98,7 +141,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 
 		file = &File{
 			Filename: filename,
-			Mime:     "application/octet-stream",
+			Mime:     options.Mime,
 			Size:     uint64(len(bytes)),
 		}
 
@@ -269,7 +312,7 @@ func (self *fs_impl) Mkdir(path string, recursive bool) error {
 }
 
 func New(path string) (FS, error) {
-	b, e := bolt.Open(path, 0766, nil)
+	b, e := bolt.Open(path, 0600, nil)
 	if e != nil {
 		return nil, e
 	}

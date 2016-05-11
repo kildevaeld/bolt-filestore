@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	ErrNotExists = errors.New("ENOENT")
+	ErrNotExists     = errors.New("ENOENT")
+	ErrAlreadyExists = errors.New("EEXIST")
 )
 
 type File struct {
@@ -18,6 +19,7 @@ type File struct {
 type CreateOptions struct {
 	Overwrite bool
 	MkdirP    bool
+	Mime      string
 }
 
 type Node struct {
@@ -38,6 +40,7 @@ func (self *Node) Root() *Node {
 }
 
 type FS interface {
+	CreatePath(dest string, src string, options *CreateOptions) (*File, error)
 	CreateBytes(path string, b []byte, options *CreateOptions) (*File, error)
 	Create(path string, reader io.Reader, options *CreateOptions) (*File, error)
 	Read(path string) (io.Reader, error)
