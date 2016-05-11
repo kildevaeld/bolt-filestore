@@ -19,5 +19,5 @@ message File {
     bytes fid = 10 [(gogoproto.customtype) = "Fid", (gogoproto.nullable) = false];
  
     bytes meta = 11 [(gogoproto.customtype) = "Meta", (gogoproto.nullable) = false];
- 
+    bool hidden = 12;
  }
