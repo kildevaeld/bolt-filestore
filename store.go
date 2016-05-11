@@ -2,6 +2,7 @@ package files
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -24,25 +25,25 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 	split := strings.Split(path, "/")
 	l := len(split)
 	i := 0
-
-	bucket := tx.Bucket(rootBucket)
-
-	if path == "/" || path == "" {
-		return bucket, nil
-	}
-
+	var bucket *bolt.Bucket = nil
+	var cur string
 	var err error
 	for i < l {
-		cur := split[i]
-		if cur == "" {
-			break
+
+		cur = "/" + split[i]
+
+		var b *bolt.Bucket
+		if bucket == nil {
+			b = tx.Bucket(rootBucket)
+		} else {
+			b = bucket.Bucket([]byte(cur))
 		}
 
-		b := bucket.Bucket([]byte(cur))
 		if b == nil {
 			if !create {
 				return nil, ErrNotExists
 			}
+
 			b, err = bucket.CreateBucket([]byte(cur))
 			if err != nil {
 				return nil, err
@@ -50,8 +51,10 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 		}
 		i++
 		if i == l && parent {
-			continue
+
+			break
 		} else {
+
 			bucket = b
 		}
 
@@ -107,8 +110,11 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 	filename := filepath.Base(path)
 	dir := filepath.Dir(path)
 
-	if dir[0] == '/' {
+	/*if dir[0] == '/' {
 		dir = dir[1:]
+	}*/
+	if path[0] != '/' {
+		path = "/" + path
 	}
 
 	var file *File
@@ -231,7 +237,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 			return err
 		}
 		return self.bolt.Update(func(tx *bolt.Tx) error {
-
+			fmt.Printf("Path %s\n", path)
 			bucket, e := self.getBucketFromPath(path, tx, false, true)
 
 			if e != nil {
@@ -239,7 +245,21 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 			}
 			dir := filepath.Base(path)
 
-			return bucket.DeleteBucket([]byte(dir))
+			e = bucket.DeleteBucket([]byte(dir))
+
+			if e != nil {
+				return e
+			}
+
+			meta := tx.Bucket(metaBucket)
+
+			cursor := meta.Cursor()
+			bPath := []byte(path)
+			for k, _ := cursor.Seek(bPath); bytes.HasPrefix(k, bPath); k, _ = cursor.Next() {
+				meta.Delete(k)
+			}
+
+			return nil
 
 		})
 
@@ -301,8 +321,8 @@ func buildNodes(prefix string) *Node {
 
 func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) {
 
-	if prefix[0] == '/' {
-		prefix = prefix[1:]
+	if prefix[0] != '/' {
+		prefix = "/" + prefix
 	}
 
 	parent := buildNodes(prefix)
@@ -310,8 +330,7 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) 
 	return self.bolt.Update(func(tx *bolt.Tx) error {
 		var bucket *bolt.Bucket
 
-		if prefix == "" {
-
+		if prefix == "/" {
 			bucket = tx.Bucket(rootBucket)
 		} else {
 			bucket, err = self.getBucketFromPath(prefix, tx, false, false)

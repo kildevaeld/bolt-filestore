@@ -5,7 +5,7 @@ build: file.pb.go
    
    
 file.pb.go: file.proto
-	protoc --gogoslick_out=. $^
+	protoc --proto_path=${GOPATH}/src:. --gogoslick_out=. $^
      
      
 clean:

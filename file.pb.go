@@ -16,6 +16,9 @@ package files
 import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
+import _ "github.com/gogo/protobuf/gogoproto"
+
+import bytes "bytes"
 
 import strings "strings"
 import github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
@@ -35,12 +38,15 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion1
 
 type File struct {
-	Filename string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
-	Path     string `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	Filesize uint64 `protobuf:"varint,3,opt,name=filesize,proto3" json:"filesize,omitempty"`
-	Mime     string `protobuf:"bytes,4,opt,name=mime,proto3" json:"mime,omitempty"`
-	Ctime    int64  `protobuf:"varint,5,opt,name=ctime,proto3" json:"ctime,omitempty"`
-	Mtime    int64  `protobuf:"varint,6,opt,name=mtime,proto3" json:"mtime,omitempty"`
+	Filename string   `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	Path     string   `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Filesize uint64   `protobuf:"varint,3,opt,name=filesize,proto3" json:"filesize,omitempty"`
+	Mime     string   `protobuf:"bytes,4,opt,name=mime,proto3" json:"mime,omitempty"`
+	Ctime    int64    `protobuf:"varint,5,opt,name=ctime,proto3" json:"ctime,omitempty"`
+	Mtime    int64    `protobuf:"varint,6,opt,name=mtime,proto3" json:"mtime,omitempty"`
+	Uid      []byte   `protobuf:"bytes,7,opt,name=uid,proto3" json:"uid,omitempty"`
+	Gid      []byte   `protobuf:"bytes,8,opt,name=gid,proto3" json:"gid,omitempty"`
+	Perm     FileMode `protobuf:"bytes,9,opt,name=perm,proto3,customtype=FileMode" json:"perm"`
 }
 
 func (m *File) Reset()                    { *m = File{} }
@@ -93,13 +99,22 @@ func (this *File) Equal(that interface{}) bool {
 	if this.Mtime != that1.Mtime {
 		return false
 	}
+	if !bytes.Equal(this.Uid, that1.Uid) {
+		return false
+	}
+	if !bytes.Equal(this.Gid, that1.Gid) {
+		return false
+	}
+	if !this.Perm.Equal(that1.Perm) {
+		return false
+	}
 	return true
 }
 func (this *File) GoString() string {
 	if this == nil {
 		return "nil"
 	}
-	s := make([]string, 0, 10)
+	s := make([]string, 0, 13)
 	s = append(s, "&files.File{")
 	s = append(s, "Filename: "+fmt.Sprintf("%#v", this.Filename)+",\n")
 	s = append(s, "Path: "+fmt.Sprintf("%#v", this.Path)+",\n")
@@ -107,6 +122,9 @@ func (this *File) GoString() string {
 	s = append(s, "Mime: "+fmt.Sprintf("%#v", this.Mime)+",\n")
 	s = append(s, "Ctime: "+fmt.Sprintf("%#v", this.Ctime)+",\n")
 	s = append(s, "Mtime: "+fmt.Sprintf("%#v", this.Mtime)+",\n")
+	s = append(s, "Uid: "+fmt.Sprintf("%#v", this.Uid)+",\n")
+	s = append(s, "Gid: "+fmt.Sprintf("%#v", this.Gid)+",\n")
+	s = append(s, "Perm: "+fmt.Sprintf("%#v", this.Perm)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -183,6 +201,26 @@ func (m *File) MarshalTo(data []byte) (int, error) {
 		i++
 		i = encodeVarintFile(data, i, uint64(m.Mtime))
 	}
+	if len(m.Uid) > 0 {
+		data[i] = 0x3a
+		i++
+		i = encodeVarintFile(data, i, uint64(len(m.Uid)))
+		i += copy(data[i:], m.Uid)
+	}
+	if len(m.Gid) > 0 {
+		data[i] = 0x42
+		i++
+		i = encodeVarintFile(data, i, uint64(len(m.Gid)))
+		i += copy(data[i:], m.Gid)
+	}
+	data[i] = 0x4a
+	i++
+	i = encodeVarintFile(data, i, uint64(m.Perm.Size()))
+	n1, err := m.Perm.MarshalTo(data[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n1
 	return i, nil
 }
 
@@ -237,6 +275,16 @@ func (m *File) Size() (n int) {
 	if m.Mtime != 0 {
 		n += 1 + sovFile(uint64(m.Mtime))
 	}
+	l = len(m.Uid)
+	if l > 0 {
+		n += 1 + l + sovFile(uint64(l))
+	}
+	l = len(m.Gid)
+	if l > 0 {
+		n += 1 + l + sovFile(uint64(l))
+	}
+	l = m.Perm.Size()
+	n += 1 + l + sovFile(uint64(l))
 	return n
 }
 
@@ -264,6 +312,9 @@ func (this *File) String() string {
 		`Mime:` + fmt.Sprintf("%v", this.Mime) + `,`,
 		`Ctime:` + fmt.Sprintf("%v", this.Ctime) + `,`,
 		`Mtime:` + fmt.Sprintf("%v", this.Mtime) + `,`,
+		`Uid:` + fmt.Sprintf("%v", this.Uid) + `,`,
+		`Gid:` + fmt.Sprintf("%v", this.Gid) + `,`,
+		`Perm:` + fmt.Sprintf("%v", this.Perm) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -449,6 +500,98 @@ func (m *File) Unmarshal(data []byte) error {
 					break
 				}
 			}
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Uid", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFile
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFile
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Uid = append(m.Uid[:0], data[iNdEx:postIndex]...)
+			if m.Uid == nil {
+				m.Uid = []byte{}
+			}
+			iNdEx = postIndex
+		case 8:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Gid", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFile
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFile
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Gid = append(m.Gid[:0], data[iNdEx:postIndex]...)
+			if m.Gid == nil {
+				m.Gid = []byte{}
+			}
+			iNdEx = postIndex
+		case 9:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Perm", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowFile
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthFile
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Perm.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipFile(data[iNdEx:])
@@ -576,16 +719,22 @@ var (
 )
 
 var fileDescriptorFile = []byte{
-	// 172 bytes of a gzipped FileDescriptorProto
+	// 258 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0xe2, 0xe2, 0x4a, 0xcb, 0xcc, 0x49,
-	0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x05, 0xb1, 0x8b, 0x95, 0x26, 0x31, 0x72, 0xb1,
-	0xb8, 0x01, 0x59, 0x42, 0x52, 0x5c, 0x1c, 0x20, 0x91, 0xbc, 0xc4, 0xdc, 0x54, 0x09, 0x46, 0x05,
-	0x46, 0x0d, 0xce, 0x20, 0x38, 0x5f, 0x48, 0x88, 0x8b, 0xa5, 0x20, 0xb1, 0x24, 0x43, 0x82, 0x09,
-	0x2c, 0x0e, 0x66, 0xc3, 0xd4, 0x17, 0x67, 0x56, 0xa5, 0x4a, 0x30, 0x03, 0xc5, 0x59, 0x82, 0xe0,
-	0x7c, 0x90, 0xfa, 0xdc, 0x4c, 0xa0, 0x39, 0x2c, 0x10, 0xf5, 0x20, 0xb6, 0x90, 0x08, 0x17, 0x6b,
-	0x72, 0x09, 0x48, 0x90, 0x15, 0x28, 0xc8, 0x1c, 0x04, 0xe1, 0x80, 0x44, 0x73, 0xc1, 0xa2, 0x6c,
-	0x10, 0x51, 0x30, 0xc7, 0x49, 0xe7, 0xc2, 0x43, 0x39, 0x86, 0x1b, 0x40, 0xfc, 0xe1, 0xa1, 0x1c,
-	0x63, 0xc3, 0x23, 0x39, 0xc6, 0x15, 0x40, 0x7c, 0x02, 0x88, 0x2f, 0x00, 0xf1, 0x03, 0x20, 0x7e,
-	0xf1, 0x08, 0x28, 0x07, 0xa4, 0x27, 0x3c, 0x96, 0x63, 0x48, 0x62, 0x03, 0x7b, 0xc8, 0x18, 0x10,
-	0x00, 0x00, 0xff, 0xff, 0xc9, 0xb7, 0xfa, 0xc4, 0xde, 0x00, 0x00, 0x00,
+	0xd5, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0x05, 0xb1, 0x8b, 0xa5, 0x74, 0xd3, 0x33, 0x4b,
+	0x32, 0x4a, 0x93, 0xf4, 0x92, 0xf3, 0x73, 0xf5, 0xd3, 0xf3, 0xd3, 0xf3, 0xf5, 0xc1, 0xb2, 0x49,
+	0xa5, 0x69, 0x60, 0x1e, 0x98, 0x03, 0x66, 0x41, 0x74, 0x29, 0xdd, 0x61, 0xe4, 0x62, 0x71, 0x03,
+	0x6a, 0x14, 0x92, 0xe2, 0xe2, 0x00, 0x19, 0x90, 0x97, 0x98, 0x9b, 0x2a, 0xc1, 0xa8, 0xc0, 0xa8,
+	0xc1, 0x19, 0x04, 0xe7, 0x0b, 0x09, 0x71, 0xb1, 0x14, 0x24, 0x96, 0x64, 0x48, 0x30, 0x81, 0xc5,
+	0xc1, 0x6c, 0x98, 0xfa, 0xe2, 0xcc, 0xaa, 0x54, 0x09, 0x66, 0xa0, 0x38, 0x4b, 0x10, 0x9c, 0x0f,
+	0x52, 0x9f, 0x9b, 0x09, 0x34, 0x87, 0x05, 0xa2, 0x1e, 0xc4, 0x16, 0x12, 0xe1, 0x62, 0x4d, 0x2e,
+	0x01, 0x09, 0xb2, 0x02, 0x05, 0x99, 0x83, 0x20, 0x1c, 0x90, 0x68, 0x2e, 0x58, 0x94, 0x0d, 0x22,
+	0x0a, 0xe6, 0x08, 0x09, 0x70, 0x31, 0x97, 0x66, 0xa6, 0x48, 0xb0, 0x03, 0xc5, 0x78, 0x82, 0x40,
+	0x4c, 0x90, 0x48, 0x3a, 0x50, 0x84, 0x03, 0x22, 0x02, 0x64, 0x0a, 0xa9, 0x00, 0xdd, 0x94, 0x5a,
+	0x94, 0x2b, 0xc1, 0x09, 0x12, 0x72, 0x12, 0x38, 0x71, 0x4f, 0x9e, 0xe1, 0xd6, 0x3d, 0x79, 0x0e,
+	0x90, 0x5f, 0x7c, 0xf3, 0x53, 0x52, 0x83, 0xc0, 0xb2, 0x4e, 0x3a, 0x17, 0x1e, 0xca, 0x31, 0xdc,
+	0x00, 0xe2, 0x0f, 0x0f, 0xe5, 0x18, 0x1b, 0x1e, 0xc9, 0x31, 0xae, 0x00, 0xe2, 0x13, 0x40, 0x7c,
+	0x01, 0x88, 0x1f, 0x00, 0xf1, 0x8b, 0x47, 0x40, 0x39, 0x20, 0x3d, 0xe1, 0xb1, 0x1c, 0x43, 0x12,
+	0x1b, 0x38, 0x4c, 0x8c, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0x8b, 0x47, 0x7f, 0x64, 0x57, 0x01,
+	0x00, 0x00,
 }

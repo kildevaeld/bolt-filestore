@@ -1,6 +1,10 @@
 syntax = "proto3";
 package files;
 
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+
+
 message File {
     string filename = 1;
     string path = 2;
@@ -8,4 +12,8 @@ message File {
     string mime = 4;
     int64 ctime = 5;
     int64 mtime = 6;
+    
+    bytes uid = 7;
+    bytes gid = 8;
+    bytes perm = 9 [(gogoproto.customtype) = "FileMode", (gogoproto.nullable) = false];
  }

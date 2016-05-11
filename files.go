@@ -22,6 +22,7 @@ type CreateOptions struct {
 	Overwrite bool
 	MkdirP    bool
 	Mime      string
+	Perm      FileMode
 }
 
 type Node struct {
