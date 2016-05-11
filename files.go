@@ -10,11 +10,13 @@ var (
 	ErrAlreadyExists = errors.New("EEXIST")
 )
 
-type File struct {
+/*type File struct {
 	Filename string
 	Size     uint64
 	Mime     string
-}
+	Ctime    time.Time
+	c
+}*/
 
 type CreateOptions struct {
 	Overwrite bool
@@ -45,7 +47,9 @@ type FS interface {
 	Create(path string, reader io.Reader, options *CreateOptions) (*File, error)
 	Read(path string) (io.Reader, error)
 	Get(path string) (*File, error)
-	Remove(path string) error
+	Remove(path string, recursive bool) error
 	Mkdir(path string, recursive bool) error
 	List(prefix string, fn func(node *Node) error) error
+
+	ListMeta(fn func(path string) error) error
 }

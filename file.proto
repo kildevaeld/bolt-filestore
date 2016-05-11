@@ -1,0 +1,11 @@
+syntax = "proto3";
+package files;
+
+message File {
+    string filename = 1;
+    string path = 2;
+    uint64 filesize = 3;
+    string mime = 4;
+    int64 ctime = 5;
+    int64 mtime = 6;
+ }

@@ -2,12 +2,12 @@ package files
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/boltdb/bolt"
 )
@@ -19,7 +19,7 @@ type fs_impl struct {
 	bolt *bolt.DB
 }
 
-func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool) (*bolt.Bucket, error) {
+func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, parent bool) (*bolt.Bucket, error) {
 
 	split := strings.Split(path, "/")
 	l := len(split)
@@ -48,10 +48,13 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool) (*
 				return nil, err
 			}
 		}
-
-		bucket = b
-
 		i++
+		if i == l && parent {
+			continue
+		} else {
+			bucket = b
+		}
+
 	}
 	return bucket, nil
 }
@@ -111,7 +114,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 	var file *File
 
 	err := self.bolt.Update(func(tx *bolt.Tx) error {
-		bucket, err := self.getBucketFromPath(dir, tx, options.MkdirP)
+		bucket, err := self.getBucketFromPath(dir, tx, options.MkdirP, false)
 		if err != nil {
 			return err
 		}
@@ -133,21 +136,33 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			return ErrAlreadyExists
 		}
 
-		if e := bucket.Put([]byte(filename), bytes); e != nil {
-			return e
-		}
-
 		meta := tx.Bucket(metaBucket)
+		now := time.Now().Unix()
 
 		file = &File{
 			Filename: filename,
 			Mime:     options.Mime,
-			Size:     uint64(len(bytes)),
+			Filesize: uint64(len(bytes)),
+			Path:     filepath.Join(path, filename),
+			Ctime:    now,
+			Mtime:    now,
 		}
 
-		b, _ := json.Marshal(file)
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
 
-		return meta.Put([]byte(path), b)
+		if e := meta.Put([]byte(path), b); e != nil {
+			return e
+		}
+
+		if e := bucket.Put([]byte(filename), bytes); e != nil {
+			meta.Delete([]byte(path))
+			return e
+		}
+
+		return nil
 	})
 
 	return file, err
@@ -155,7 +170,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 
 func (self *fs_impl) Get(path string) (*File, error) {
 
-	var file File
+	file := &File{}
 	err := self.bolt.View(func(tx *bolt.Tx) error {
 
 		meta := tx.Bucket(metaBucket)
@@ -169,10 +184,11 @@ func (self *fs_impl) Get(path string) (*File, error) {
 			return ErrNotExists
 		}
 
-		return json.Unmarshal(value, &file)
+		return file.Unmarshal(value)
+
 	})
 
-	return &file, err
+	return file, err
 }
 
 func (self *fs_impl) Read(path string) (io.Reader, error) {
@@ -187,7 +203,7 @@ func (self *fs_impl) Read(path string) (io.Reader, error) {
 			dir = dir[1:]
 		}
 
-		bucket, err := self.getBucketFromPath(dir, tx, false)
+		bucket, err := self.getBucketFromPath(dir, tx, false, false)
 
 		if err != nil {
 			return err
@@ -207,10 +223,26 @@ func (self *fs_impl) Read(path string) (io.Reader, error) {
 	return reader, nil
 }
 
-func (self *fs_impl) Remove(path string) error {
+func (self *fs_impl) Remove(path string, recursive bool) error {
 
 	_, err := self.Get(path)
 	if err != nil {
+		if !recursive {
+			return err
+		}
+		return self.bolt.Update(func(tx *bolt.Tx) error {
+
+			bucket, e := self.getBucketFromPath(path, tx, false, true)
+
+			if e != nil {
+				return e
+			}
+			dir := filepath.Base(path)
+
+			return bucket.DeleteBucket([]byte(dir))
+
+		})
+
 		return err
 	}
 
@@ -219,7 +251,7 @@ func (self *fs_impl) Remove(path string) error {
 
 	err = self.bolt.Update(func(tx *bolt.Tx) error {
 
-		bucket, err := self.getBucketFromPath(dir, tx, false)
+		bucket, err := self.getBucketFromPath(dir, tx, false, false)
 
 		if err != nil {
 			return err
@@ -267,7 +299,7 @@ func buildNodes(prefix string) *Node {
 	return root
 }
 
-func (self *fs_impl) List(prefix string, fn func(node *Node) error) error {
+func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) {
 
 	if prefix[0] == '/' {
 		prefix = prefix[1:]
@@ -275,11 +307,17 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) error {
 
 	parent := buildNodes(prefix)
 
-	self.bolt.Update(func(tx *bolt.Tx) error {
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		var bucket *bolt.Bucket
 
-		bucket, err := self.getBucketFromPath(prefix, tx, false)
-		if err != nil {
-			return err
+		if prefix == "" {
+
+			bucket = tx.Bucket(rootBucket)
+		} else {
+			bucket, err = self.getBucketFromPath(prefix, tx, false, false)
+			if err != nil {
+				return err
+			}
 		}
 
 		bucket.ForEach(func(k, v []byte) error {
@@ -290,7 +328,7 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) error {
 			}
 			if v == nil {
 				node.Dir = true
-				parent = node
+				//parent = node
 			}
 
 			return fn(node)
@@ -299,7 +337,18 @@ func (self *fs_impl) List(prefix string, fn func(node *Node) error) error {
 		return nil
 	})
 
-	return nil
+}
+
+func (self *fs_impl) ListMeta(fn func(path string) error) error {
+	return self.bolt.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(metaBucket)
+
+		bucket.ForEach(func(k, v []byte) error {
+			return fn(string(k))
+		})
+
+		return nil
+	})
 }
 
 func (self *fs_impl) Mkdir(path string, recursive bool) error {
