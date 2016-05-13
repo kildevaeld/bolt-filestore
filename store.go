@@ -182,6 +182,10 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 
 func (self *fs_impl) Get(path string) (*File, error) {
 
+	if len(path) == 0 || path[0] != '/' {
+		path = "/" + path
+	}
+
 	file := &File{}
 	err := self.bolt.View(func(tx *bolt.Tx) error {
 
