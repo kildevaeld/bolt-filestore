@@ -2,6 +2,7 @@ package filestore
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -26,7 +27,7 @@ type fs_impl struct {
 func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, parent bool) (*bolt.Bucket, error) {
 	debug("get bucket path: %s", path)
 
-	debug("rootbucket: %s - %d", rootBucket)
+	debug("rootbucket: %s", rootBucket)
 	var bucket *bolt.Bucket = tx.Bucket(rootBucket)
 
 	if path == "/" {
@@ -153,7 +154,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			Filename: filename,
 			Mime:     options.Mime,
 			Filesize: uint64(len(bytes)),
-			Path:     filepath.Join(path, filename),
+			Path:     dir, //filepath.Join(path, filename),
 			Ctime:    now,
 			Mtime:    now,
 			Perm:     0600,
@@ -209,7 +210,7 @@ func (self *fs_impl) Get(path string) (*File, error) {
 
 func (self *fs_impl) Read(path string) (io.Reader, error) {
 
-	var reader io.Reader
+	var reader *bytes.Buffer
 
 	err := self.bolt.View(func(tx *bolt.Tx) error {
 		filename := filepath.Base(path)
@@ -226,8 +227,10 @@ func (self *fs_impl) Read(path string) (io.Reader, error) {
 		}
 
 		b := bucket.Get([]byte(filename))
-
+		fmt.Printf("READ %d\n", len(b))
 		reader = bytes.NewBuffer(b)
+
+		//reader.Seek(0)
 
 		return nil
 	})
