@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/kildevaeld/go-filestore"
@@ -55,13 +56,15 @@ func main() {
 	})
 
 	fs.List("/", func(node *filestore.Node) error {
-		return print("", node, fs)
+		return nil
+		//return print("", node, fs)
 	})
 	//fmt.Printf("LIST %v", e)
 	e := fs.Remove("/src/lib", true)
 	fmt.Println("\nRoot: /")
 	fs.List("/", func(node *filestore.Node) error {
-		return print(" ", node, fs)
+		return nil
+		//return print(" ", node, fs)
 	})
 
 	fmt.Printf("Removed %v\n", e)
@@ -70,4 +73,18 @@ func main() {
 
 	b, _ := json.Marshal(file)
 	fmt.Printf("%s", b)
+
+	reader, err := fs.Read("src/test.txt")
+	if err != nil {
+		fmt.Printf("%s\n", err)
+		return
+	}
+
+	bs, e := ioutil.ReadAll(reader)
+
+	if e != nil {
+		fmt.Printf("%s\n", e)
+	} else {
+		fmt.Printf("Content: %s\n", bs)
+	}
 }

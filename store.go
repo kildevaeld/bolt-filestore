@@ -33,10 +33,13 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 	if path == "/" {
 		return bucket, nil
 	}
+	if path[0] == '/' {
+		path = path[1:]
+	}
 
 	split := strings.Split(path, "/")
 	l := len(split)
-	i := 1
+	i := 0
 
 	var err error
 	for i < l {
@@ -47,6 +50,7 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 		b := bucket.Bucket([]byte(cur))
 
 		if b == nil {
+			debug("	subbucket not exists: %s", cur)
 			if !create {
 				return nil, ErrNotExists
 			}
@@ -227,7 +231,15 @@ func (self *fs_impl) Read(path string) (io.Reader, error) {
 		}
 
 		b := bucket.Get([]byte(filename))
-		fmt.Printf("READ %d\n", len(b))
+
+		if b == nil {
+			bucket.ForEach(func(k, v []byte) error {
+				fmt.Printf("%s\n", k)
+				return nil
+			})
+			return fmt.Errorf("filename %s not found %s", filename, dir)
+		}
+
 		reader = bytes.NewBuffer(b)
 
 		//reader.Seek(0)
