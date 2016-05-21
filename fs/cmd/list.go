@@ -16,9 +16,31 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
+	"github.com/kildevaeld/go-filestore"
 	"github.com/spf13/cobra"
 )
+
+func printTree(fs filestore.FS, path, indent string) {
+	fs.List(path, func(node *filestore.Node) error {
+
+		if node.Dir {
+			fmt.Printf("%s├── %s\n", indent, node.Path)
+			printTree(fs, node.Path, indent+"   ")
+		} else {
+			path := filepath.Base(node.Path) //strings.Replace(in.GetResource().Path, stripPath, "", 1)
+			i := indent
+			if len(i) > 0 {
+				i = "|" + indent
+			}
+			fmt.Printf("%s├── %s\n", i, path)
+		}
+
+		return nil
+	})
+}
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -27,7 +49,14 @@ var listCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: Work your own magic here
-		
+		fs, err := filestore.New(dbPath)
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+		}
+
+		printTree(fs, "/", "")
+
 	},
 }
 
