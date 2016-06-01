@@ -2,17 +2,26 @@ package bolt
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/kildevaeld/percy/utils"
+	"github.com/kildevaeld/go-filestore"
+	. "github.com/tj/go-debug"
 )
+
+var (
+	ErrNotExists     = errors.New("ENOENT")
+	ErrAlreadyExists = errors.New("EEXIST")
+)
+
+var debug = Debug("files:bolt")
+var metaBucket = []byte("$meta")
+var rootBucket = []byte("/")
 
 type fs_impl struct {
 	bolt *bolt.DB
@@ -65,7 +74,7 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 	return bucket, nil
 }
 
-func (self *fs_impl) CreatePath(dest string, src string, options *CreateOptions) (*File, error) {
+/*func (self *fs_impl) CreatePath(dest string, src string, options *CreateOptions) (*filestore.File, error) {
 	if options == nil {
 		options = &CreateOptions{}
 	}
@@ -87,7 +96,7 @@ func (self *fs_impl) CreatePath(dest string, src string, options *CreateOptions)
 	return self.Create(dest, reader, options)
 }
 
-func (self *fs_impl) CreateBytes(path string, b []byte, options *CreateOptions) (*File, error) {
+func (self *fs_impl) CreateBytes(path string, b []byte, options *CreateOptions) (*filestore.File, error) {
 	buf := bytes.NewBuffer(b)
 
 	if options == nil {
@@ -103,10 +112,10 @@ func (self *fs_impl) CreateBytes(path string, b []byte, options *CreateOptions) 
 	}
 
 	return self.Create(path, buf, options)
-}
+}*/
 
-func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOptions) (*File, error) {
-	if options == nil {
+func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOptions) (*filestore.File, error) {
+	/*if options == nil {
 		options = &CreateOptions{}
 	}
 
@@ -176,16 +185,17 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 		return nil
 	})
 
-	return file, err
+	return file, err*/
+	return nil, nil
 }
 
-func (self *fs_impl) Get(path string) (*File, error) {
+func (self *fs_impl) Get(path string) (*filestore.File, error) {
 
 	if len(path) == 0 || path[0] != '/' {
 		path = "/" + path
 	}
 
-	file := &File{}
+	file := &filestore.File{}
 	err := self.bolt.View(func(tx *bolt.Tx) error {
 
 		meta := tx.Bucket(metaBucket)
@@ -314,7 +324,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 	return err
 }
 
-func buildNodes(prefix string) *Node {
+func buildNodes(prefix string) *filestore.Node {
 	root := &Node{
 		Dir:    true,
 		Parent: nil,
@@ -341,7 +351,7 @@ func buildNodes(prefix string) *Node {
 	return root
 }
 
-func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) {
+func (self *fs_impl) List(prefix string, fn func(node *filestore.Node) error) (err error) {
 
 	if prefix == "" || prefix[0] != '/' {
 		prefix = "/" + prefix
@@ -400,8 +410,30 @@ func (self *fs_impl) Mkdir(path string, recursive bool) error {
 
 	return nil
 }
+func (self *fs_impl) Update(path string, info *File) error {
+	file, err := self.Get(path)
+	if err != nil {
+		return err
+	}
 
-func (self *fs_impl) Chmod(path string, mode FileMode) error {
+	return self.bolt.Update(func(tx *bolt.Tx) error {
+		meta := tx.Bucket(metaBucket)
+
+		file.Mtime = time.Now().Unix()
+		file.Perm = mode
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		return meta.Put([]byte(path), b)
+	})
+
+	return nil
+}
+
+/*func (self *fs_impl) Chmod(path string, mode FileMode) error {
 
 	file, err := self.Get(path)
 	if err != nil {
@@ -485,4 +517,30 @@ func (self *fs_impl) SetMeta(path string, metadata Meta) error {
 		return meta.Put([]byte(path), b)
 	})
 
+}*/
+
+func New(path string) (filestore.FileStore, error) {
+	b, e := bolt.Open(path, 0600, nil)
+	if e != nil {
+		return nil, e
+	}
+
+	err := b.Update(func(tx *bolt.Tx) error {
+
+		if _, e := tx.CreateBucketIfNotExists(metaBucket); e != nil {
+			return e
+		}
+
+		if _, e := tx.CreateBucketIfNotExists(rootBucket); e != nil {
+			return e
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &fs_impl{b}, nil
 }

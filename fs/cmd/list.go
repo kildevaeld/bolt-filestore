@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/kildevaeld/go-filestore"
+	"github.com/kildevaeld/go-filestore/stores/bolt"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +50,8 @@ var listCmd = &cobra.Command{
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: Work your own magic here
-		fs, err := filestore.New(dbPath)
+		s, err := bolt.New(dbPath)
+		fs, _ := filestore.New(s)
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err)
