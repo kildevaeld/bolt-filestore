@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,7 +34,7 @@ func (self *fs_impl) getBucketFromPath(path string, tx *bolt.Tx, create bool, pa
 	debug("rootbucket: %s", rootBucket)
 	var bucket *bolt.Bucket = tx.Bucket(rootBucket)
 
-	if path == "/" {
+	if path == "/" || path == "" {
 		return bucket, nil
 	}
 	if path[0] == '/' {
@@ -114,7 +115,49 @@ func (self *fs_impl) CreateBytes(path string, b []byte, options *CreateOptions) 
 	return self.Create(path, buf, options)
 }*/
 
-func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOptions) (*filestore.File, error) {
+func (self *fs_impl) Create(reader io.Reader, file *filestore.File) (uint64, error) {
+
+	bytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return 0, err
+	}
+
+	fullPath := filepath.Join(file.Path, file.Filename)
+
+	file.Filesize = uint64(len(bytes))
+
+	err = self.bolt.Update(func(tx *bolt.Tx) error {
+		bucket, err := self.getBucketFromPath(file.Path, tx, true, false)
+		if err != nil {
+			return err
+		}
+
+		meta := tx.Bucket(metaBucket)
+
+		b, e := file.Marshal()
+		if e != nil {
+			return e
+		}
+
+		if e := meta.Put([]byte(fullPath), b); e != nil {
+			return e
+		}
+
+		if e := bucket.Put([]byte(file.Filename), bytes); e != nil {
+			meta.Delete([]byte(fullPath))
+			return e
+		}
+
+		return nil
+
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(len(bytes)), nil
+
 	/*if options == nil {
 		options = &CreateOptions{}
 	}
@@ -186,7 +229,7 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 	})
 
 	return file, err*/
-	return nil, nil
+	return 0, nil
 }
 
 func (self *fs_impl) Get(path string) (*filestore.File, error) {
@@ -325,7 +368,7 @@ func (self *fs_impl) Remove(path string, recursive bool) error {
 }
 
 func buildNodes(prefix string) *filestore.Node {
-	root := &Node{
+	root := &filestore.Node{
 		Dir:    true,
 		Parent: nil,
 		Path:   "/",
@@ -340,7 +383,7 @@ func buildNodes(prefix string) *filestore.Node {
 	i := 0
 
 	for i < l {
-		n := &Node{
+		n := &filestore.Node{
 			Dir:    true,
 			Parent: root,
 			Path:   filepath.Join(root.Path, split[i]),
@@ -372,7 +415,7 @@ func (self *fs_impl) List(prefix string, fn func(node *filestore.Node) error) (e
 		}
 
 		return bucket.ForEach(func(k, v []byte) error {
-			node := &Node{
+			node := &filestore.Node{
 				Dir:    false,
 				Parent: parent,
 				Path:   filepath.Join(parent.Path, string(k)),
@@ -389,10 +432,10 @@ func (self *fs_impl) List(prefix string, fn func(node *filestore.Node) error) (e
 
 }
 
-func (self *fs_impl) ListMeta(fn func(path string, file File) error) error {
+func (self *fs_impl) ListMeta(fn func(path string, file filestore.File) error) error {
 	return self.bolt.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(metaBucket)
-		var file File
+		var file filestore.File
 		bucket.ForEach(func(k, v []byte) error {
 			file.Unmarshal(v)
 			return fn(string(k), file)
@@ -410,7 +453,7 @@ func (self *fs_impl) Mkdir(path string, recursive bool) error {
 
 	return nil
 }
-func (self *fs_impl) Update(path string, info *File) error {
+func (self *fs_impl) Update(path string, info *filestore.File) error {
 	file, err := self.Get(path)
 	if err != nil {
 		return err
@@ -420,7 +463,7 @@ func (self *fs_impl) Update(path string, info *File) error {
 		meta := tx.Bucket(metaBucket)
 
 		file.Mtime = time.Now().Unix()
-		file.Perm = mode
+		//file.Perm = mode
 
 		b, e := file.Marshal()
 		if e != nil {
@@ -433,91 +476,9 @@ func (self *fs_impl) Update(path string, info *File) error {
 	return nil
 }
 
-/*func (self *fs_impl) Chmod(path string, mode FileMode) error {
-
-	file, err := self.Get(path)
-	if err != nil {
-		return err
-	}
-
-	return self.bolt.Update(func(tx *bolt.Tx) error {
-		meta := tx.Bucket(metaBucket)
-
-		file.Mtime = time.Now().Unix()
-		file.Perm = mode
-
-		b, e := file.Marshal()
-		if e != nil {
-			return e
-		}
-
-		return meta.Put([]byte(path), b)
-	})
-
+func (self *fs_impl) Close() error {
+	return self.bolt.Close()
 }
-func (self *fs_impl) Chown(path string, uid []byte) error {
-	file, err := self.Get(path)
-	if err != nil {
-		return err
-	}
-
-	return self.bolt.Update(func(tx *bolt.Tx) error {
-		meta := tx.Bucket(metaBucket)
-
-		file.Mtime = time.Now().Unix()
-		file.Uid = uid
-
-		b, e := file.Marshal()
-		if e != nil {
-			return e
-		}
-
-		return meta.Put([]byte(path), b)
-	})
-}
-func (self *fs_impl) Chgrp(path string, guid []byte) error {
-	file, err := self.Get(path)
-	if err != nil {
-		return err
-	}
-
-	return self.bolt.Update(func(tx *bolt.Tx) error {
-		meta := tx.Bucket(metaBucket)
-
-		file.Mtime = time.Now().Unix()
-		file.Guid = guid
-
-		b, e := file.Marshal()
-		if e != nil {
-			return e
-		}
-
-		return meta.Put([]byte(path), b)
-	})
-}
-
-func (self *fs_impl) SetMeta(path string, metadata Meta) error {
-
-	file, err := self.Get(path)
-	if err != nil {
-		return err
-	}
-
-	return self.bolt.Update(func(tx *bolt.Tx) error {
-		meta := tx.Bucket(metaBucket)
-
-		file.Mtime = time.Now().Unix()
-		file.Meta = metadata
-
-		b, e := file.Marshal()
-		if e != nil {
-			return e
-		}
-
-		return meta.Put([]byte(path), b)
-	})
-
-}*/
 
 func New(path string) (filestore.FileStore, error) {
 	b, e := bolt.Open(path, 0600, nil)

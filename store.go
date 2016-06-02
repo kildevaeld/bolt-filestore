@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
+	"time"
 
+	"github.com/kildevaeld/percy/utils"
 	. "github.com/tj/go-debug"
 )
 
@@ -66,8 +69,8 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 		path = "/" + path
 	}
 
-	//filename := filepath.Base(path)
-	//dir := filepath.Dir(path)
+	filename := filepath.Base(path)
+	dir := filepath.Dir(path)
 
 	if options.Mime == "" {
 
@@ -83,43 +86,69 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 			}
 			options.Mime = mime
 
+			if _, err := seeker.Seek(0, 0); err != nil {
+				return nil, err
+			}
+
 		} else {
 			options.Mime = "application/octet-stream"
 		}
 
 	}
+	now := time.Now().Unix()
+	file := &File{
+		Fid:      Fid(utils.NewSid()),
+		Filename: filename,
+		Mime:     options.Mime,
+		//Filesize: uint64(len(bytes)),
+		Path:  dir, //filepath.Join(path, filename),
+		Ctime: now,
+		Mtime: now,
+		Perm:  0600,
+		Meta:  Meta{},
+	}
 
-	return nil, nil
+	size, err := self.store.Create(reader, file)
+	if err != nil {
+		return nil, err
+	}
+
+	file.Filesize = size
+
+	return file, nil
+}
+
+func (self *fs_impl) normalizePath(path string) string {
+	if len(path) == 0 || path[0] != '/' {
+		path = "/" + path
+	}
+	return path
 }
 
 func (self *fs_impl) Get(path string) (*File, error) {
-
-	if len(path) == 0 || path[0] != '/' {
-		path = "/" + path
-	}
-
+	path = self.normalizePath(path)
 	return self.store.Get(path)
-
 }
 
 func (self *fs_impl) Read(path string) (io.Reader, error) {
-	if len(path) == 0 || path[0] != '/' {
-		path = "/" + path
-	}
-
+	path = self.normalizePath(path)
 	return self.store.Read(path)
 }
 
 func (self *fs_impl) Remove(path string, recursive bool) error {
-	return nil
+	path = self.normalizePath(path)
+	return self.store.Remove(path, recursive)
 }
 
 func (self *fs_impl) List(prefix string, fn func(node *Node) error) (err error) {
-	return nil
+	//path := self.normalizePath(path)
+	return self.store.List(prefix, fn)
 }
 
 func (self *fs_impl) ListMeta(fn func(path string, file File) error) error {
+
 	return nil
+	//return self.store.ListMeta(fn)
 }
 
 func (self *fs_impl) Mkdir(path string, recursive bool) error {

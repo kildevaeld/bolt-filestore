@@ -20,6 +20,7 @@ import (
 	"os"
 
 	"github.com/kildevaeld/go-filestore"
+	"github.com/kildevaeld/go-filestore/stores/bolt"
 	"github.com/spf13/cobra"
 )
 
@@ -35,8 +36,8 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: Work your own magic here
-
-		fs, err := filestore.New(dbPath)
+		s, err := bolt.New(dbPath)
+		fs, _ := filestore.New(s)
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", err)

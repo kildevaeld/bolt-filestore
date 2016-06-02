@@ -61,7 +61,7 @@ type FS interface {
 type FileStore interface {
 	//CreatePath(dest string, src string, options *CreateOptions) (*File, error)
 	//CreateBytes(path string, b []byte, options *CreateOptions) (*File, error)
-	Create(path string, reader io.Reader) (*File, error)
+	Create(reader io.Reader, file *File) (uint64, error)
 	Read(path string) (io.Reader, error)
 	Get(path string) (*File, error)
 	Remove(path string, recursive bool) error
