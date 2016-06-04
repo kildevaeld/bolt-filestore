@@ -106,6 +106,8 @@ func (self *fs_impl) Create(path string, reader io.Reader, options *CreateOption
 		Mtime: now,
 		Perm:  0600,
 		Meta:  Meta{},
+		Uid:   options.Uid,
+		Guid:  options.Guid,
 	}
 
 	size, err := self.store.Create(reader, file)

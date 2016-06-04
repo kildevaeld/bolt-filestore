@@ -23,6 +23,8 @@ type CreateOptions struct {
 	MkdirP    bool
 	Mime      string
 	Perm      FileMode
+	Uid       []byte
+	Guid      []byte
 }
 
 type Node struct {
