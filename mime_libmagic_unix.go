@@ -6,7 +6,7 @@ import "github.com/rakyll/magicmime"
 
 func detectContentType(sample []byte) (string, error) {
 	if len(sample) == 0 {
-		return "application/octet-stream"
+		return "application/octet-stream", nil
 	}
 	if err := magicmime.Open(magicmime.MAGIC_MIME_TYPE | magicmime.MAGIC_SYMLINK | magicmime.MAGIC_ERROR); err != nil {
 		return "", err
